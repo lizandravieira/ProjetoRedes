@@ -15,7 +15,7 @@ def introduce_error(message):
     return message
 
 def server_program():
-    host = socket.gethostname()
+    host = '127.0.0.1'
     port = 5000
 
     server_socket = socket.socket()
@@ -35,47 +35,90 @@ def server_program():
     window_size = 5
     conn.send(str(window_size).encode())
 
-    while True:
-        # Dentro do bloco de processamento do pacote, antes de processar
-        try:
-            # Recebe o pacote
-            data = conn.recv(1024).decode()
+    accumulated_responses = []
+    expected_packets = 0
+    is_burst_mode = False
+    packets_received = 0
 
+    while True:
+        try:
+            conn.settimeout(10)
+            data = conn.recv(1024).decode()
+            
             if not data or data.lower().strip() == 'bye':
                 print("Conexão encerrada pelo cliente.")
                 break
 
-            # Simula a perda de pacotes antes de qualquer processamento
-            if random.random() < 0.2:  # 20% de chance de "perder" o pacote
-                print("Pacote perdido (simulação). Nenhum processamento realizado.")
+            print(f"Dado recebido do cliente: {data}")
+
+            # Se é o início de uma rajada, extraia o número de pacotes esperados
+            if data.startswith("BURST:"):
+                expected_packets = int(data.split(":")[1])
+                is_burst_mode = True
+                packets_received = 0
+                accumulated_responses = []
+                print(f"Iniciando modo rajada. Esperando {expected_packets} pacotes.")
                 continue
 
-            # Processa o pacote apenas se ele não foi "perdido"
-            sequence_number, message, received_checksum = data.split('|')
+            # Processa o pacote recebido
+            if random.random() < 0.2:  # 20% de chance de "perder" o pacote
+                print("Pacote perdido (simulação). Nenhum processamento realizado.")
+                if is_burst_mode:
+                    packets_received += 1
+                continue
+
+            try:
+                sequence_number, message, received_checksum = data.split('|')
+                print(f"Processando pacote {sequence_number}")
+            except ValueError as e:
+                print(f"Erro ao processar dados: {e}")
+                continue
 
             # Verifica corrupção no pacote
             if '?' in message:
-                print(f"Erro: Mensagem corrompida detectada! Sequência {sequence_number}, Mensagem: {message}")
-                conn.send(f"NACK|{sequence_number}".encode())
-                continue
+                print(f"Erro: Mensagem corrompida detectada! Sequência {sequence_number}")
+                response = f"NACK|{sequence_number}"
+            else:
+                # Calcula e valida o checksum
+                calculated_checksum = calculate_checksum(message)
+                if int(received_checksum) != calculated_checksum:
+                    print(f"Erro de integridade detectado! Sequência {sequence_number}")
+                    response = f"NACK|{sequence_number}"
+                else:
+                    print(f"Pacote {sequence_number} recebido com sucesso: {message}")
+                    response = f"ACK|{sequence_number}"
 
-            # Calcula e valida o checksum
-            calculated_checksum = calculate_checksum(message)
-            if int(received_checksum) != calculated_checksum:
-                print(f"Erro de integridade detectado! Sequência {sequence_number}")
-                conn.send(f"NACK|{sequence_number}".encode())
-                continue
+            if is_burst_mode:
+                accumulated_responses.append(response)
+                packets_received += 1
+                
+                # Se recebeu todos os pacotes da rajada, envia todas as respostas
+                if packets_received >= expected_packets:
+                    combined_response = ";".join(accumulated_responses)
+                    conn.send(combined_response.encode())
+                    print(f"Enviando respostas acumuladas: {combined_response}")
+                    is_burst_mode = False
+                    accumulated_responses = []
+            else:
+                # Modo normal (pacote único)
+                response = introduce_error(response)
+                conn.send(response.encode())
 
-            print(f"Pacote {sequence_number} recebido com sucesso: {message} (Checksum válido)")
-
-            # Envia confirmação (ACK) ou erro intencional na confirmação
-            ack = f"ACK|{sequence_number}"
-            ack = introduce_error(ack)  # Possível erro na confirmação
-            conn.send(ack.encode())
+        except socket.timeout:
+            if is_burst_mode and accumulated_responses:
+                # Envia as respostas acumuladas mesmo em caso de timeout
+                combined_response = ";".join(accumulated_responses)
+                conn.send(combined_response.encode())
+                print(f"Enviando respostas acumuladas após timeout: {combined_response}")
+                is_burst_mode = False
+                accumulated_responses = []
+            else:
+                print("Tempo de espera esgotado para receber dados.")
+            continue
 
         except Exception as e:
             print(f"Erro na recepção de pacotes: {e}")
-            break
+            continue
 
     conn.close()
 
