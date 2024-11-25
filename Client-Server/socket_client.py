@@ -34,9 +34,11 @@ def client_program():
         if mode == '1':
             message = input(" -> ")
 
+            # Trunca a mensagem se exceder 5 caracteres
             if len(message) > 5:
-              print("Erro: A mensagem excede o limite de 5 caracteres. Pacote descartado.")
-              continue  # Volta ao início do loop sem enviar o pacote
+                truncated_message = message[:5]
+                print(f"A mensagem excede 5 caracteres. Usando apenas '{truncated_message}'.")
+                message = truncated_message
 
             corrupt = input("Deseja corromper o pacote? (s/n): ")
             sequence_number = 1  # Define o número de sequência para pacote único
@@ -83,10 +85,11 @@ def client_program():
             for i in range(num_packets):
                 message = input(f"Pacote {i + 1} -> ")
             
-                # Verifica o limite de caracteres
+               # Trunca a mensagem se exceder 5 caracteres
                 if len(message) > 5:
-                    print(f"Erro: A mensagem do pacote {i + 1} excede o limite de 5 caracteres. Pacote descartado.")
-                    continue  # Passa para o próximo pacote sem enviar
+                  truncated_message = message[:5]
+                  print(f"A mensagem do pacote {i + 1} excede 5 caracteres. Usando apenas '{truncated_message}'.")
+                  message = truncated_message
             
                 sequence_number = i + 1
                 checksum = calculate_checksum(message)
