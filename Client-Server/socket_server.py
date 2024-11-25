@@ -16,7 +16,7 @@ def introduce_error(message):
 
 def server_program():
     host = '127.0.0.1'
-    port = 5000
+    port = 6000
 
     server_socket = socket.socket()
     server_socket.bind((host, port))
@@ -39,6 +39,8 @@ def server_program():
     expected_packets = 0
     is_burst_mode = False
     packets_received = 0
+    last_ack_sent = 0
+    received_packets = {}
 
     while True:
         try:
@@ -57,6 +59,7 @@ def server_program():
                 is_burst_mode = True
                 packets_received = 0
                 accumulated_responses = []
+                received_packets = {}
                 print(f"Iniciando modo rajada. Esperando {expected_packets} pacotes.")
                 continue
 
@@ -69,6 +72,7 @@ def server_program():
 
             try:
                 sequence_number, message, received_checksum = data.split('|')
+                sequence_number = int(sequence_number)
                 print(f"Processando pacote {sequence_number}")
             except ValueError as e:
                 print(f"Erro ao processar dados: {e}")
@@ -87,6 +91,12 @@ def server_program():
                 else:
                     print(f"Pacote {sequence_number} recebido com sucesso: {message}")
                     response = f"ACK|{sequence_number}"
+                    received_packets[sequence_number] = message
+                    if protocol == '1':  # Go-Back-N
+                        if sequence_number == last_ack_sent + 1:
+                            last_ack_sent = sequence_number
+                        else:
+                            response = f"ACK|{last_ack_sent}"
 
             if is_burst_mode:
                 accumulated_responses.append(response)
@@ -113,8 +123,18 @@ def server_program():
                 is_burst_mode = False
                 accumulated_responses = []
             else:
+                # Envia ACK para o último pacote recebido em ordem
+                if last_ack_sent > 0:
+                    response = f"ACK|{last_ack_sent}"
+                    response = introduce_error(response)
+                    conn.send(response.encode())
+                    print(f"Reenviando último ACK: {response}")
                 print("Tempo de espera esgotado para receber dados.")
             continue
+
+        except ConnectionResetError as e:
+            print(f"Conexão encerrada pelo cliente: {e}")
+            break
 
         except Exception as e:
             print(f"Erro na recepção de pacotes: {e}")

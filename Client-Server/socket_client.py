@@ -15,7 +15,7 @@ def introduce_error(message):
 
 def client_program():
     host = '127.0.0.1'
-    port = 5000
+    port = 6000
 
     client_socket = socket.socket()
     client_socket.connect((host, port))
@@ -113,22 +113,50 @@ def client_program():
                     elif ack.startswith("NACK|"):
                         nacks_received.append(int(ack.split("|")[1]))
 
-                # Retransmite pacotes não confirmados ou com NACK
-                packets_to_retransmit = set(packets_sent) - set(acks_received)
-                if packets_to_retransmit:
-                    print(f"\nRetransmitindo pacotes: {packets_to_retransmit}")
-                    for seq_num in packets_to_retransmit:
-                        packet = packet_list[seq_num - 1]
-                        print(f"Retransmitindo pacote {seq_num}")
-                        client_socket.send(packet.encode())
+                if protocol == '1':  # Go-Back-N
+                    if nacks_received:
+                        first_nack = min(nacks_received)
+                        print(f"\nRetransmitindo pacotes a partir do pacote {first_nack}")
+                        for seq_num in range(first_nack, num_packets + 1):
+                            packet = packet_list[seq_num - 1]
+                            print(f"Retransmitindo pacote {seq_num}")
+                            client_socket.send(packet.encode())
+                            
+                            try:
+                                client_socket.settimeout(2)  # Limite de 2 segundos para retransmissão
+                                ack = client_socket.recv(1024).decode()
+                                if ack.startswith("ACK|"):
+                                    print(f"Confirmação da retransmissão: {ack}")
+                                    acks_received.append(int(ack.split("|")[1]))
+                                elif ack.startswith("NACK|"):
+                                    print(f"Confirmação negativa da retransmissão: {ack}")
+                                    nacks_received.append(int(ack.split("|")[1]))
+                            except socket.timeout:
+                                print(f"Timeout na retransmissão do pacote {seq_num}")
+                            
+                            time.sleep(interval)
+                else:  # Repetição Seletiva
+                    packets_to_retransmit = set(nacks_received)
+                    if packets_to_retransmit:
+                        print(f"\nRetransmitindo pacotes: {packets_to_retransmit}")
+                        for seq_num in packets_to_retransmit:
+                            packet = packet_list[seq_num - 1]
+                            print(f"Retransmitindo pacote {seq_num}")
+                            client_socket.send(packet.encode())
+                            
+                            try:
+                                client_socket.settimeout(2)  # Limite de 2 segundos para retransmissão
+                                ack = client_socket.recv(1024).decode()
+                                if ack.startswith("ACK|"):
+                                    print(f"Confirmação da retransmissão: {ack}")
+                                    acks_received.append(int(ack.split("|")[1]))
+                                elif ack.startswith("NACK|"):
+                                    print(f"Confirmação negativa da retransmissão: {ack}")
+                                    nacks_received.append(int(ack.split("|")[1]))
+                            except socket.timeout:
+                                print(f"Timeout na retransmissão do pacote {seq_num}")
                         
-                        try:
-                            ack = client_socket.recv(1024).decode()
-                            print(f"Confirmação da retransmissão: {ack}")
-                        except socket.timeout:
-                            print(f"Timeout na retransmissão do pacote {seq_num}")
-                        
-                        time.sleep(interval)
+                            time.sleep(interval)
                 
             except socket.timeout:
                 print("Timeout ao aguardar confirmações da rajada")
