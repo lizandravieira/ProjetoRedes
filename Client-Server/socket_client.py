@@ -32,8 +32,12 @@ def client_program():
         mode = input("Escolha o modo de envio (1 = único pacote, 2 = rajada de pacotes): ")
 
         if mode == '1':
-
             message = input(" -> ")
+
+            if len(message) > 5:
+              print("Erro: A mensagem excede o limite de 5 caracteres. Pacote descartado.")
+              continue  # Volta ao início do loop sem enviar o pacote
+
             corrupt = input("Deseja corromper o pacote? (s/n): ")
             sequence_number = 1  # Define o número de sequência para pacote único
             checksum = calculate_checksum(message)
@@ -58,7 +62,6 @@ def client_program():
                 client_socket.send(packet.encode())  # Retransmissão
 
         elif mode == '2':
-
             num_packets = int(input("Digite o número de pacotes para enviar em rajada: "))
             interval = float(input("Digite o intervalo entre pacotes (em segundos): "))
             packets_to_corrupt = input("Digite os números dos pacotes a serem corrompidos (ex: 1,3): ")
@@ -79,24 +82,31 @@ def client_program():
             print("\nEnviando pacotes...")
             for i in range(num_packets):
                 message = input(f"Pacote {i + 1} -> ")
+            
+                # Verifica o limite de caracteres
+                if len(message) > 5:
+                    print(f"Erro: A mensagem do pacote {i + 1} excede o limite de 5 caracteres. Pacote descartado.")
+                    continue  # Passa para o próximo pacote sem enviar
+            
                 sequence_number = i + 1
                 checksum = calculate_checksum(message)
-
+            
                 if (i + 1) in packets_to_corrupt:
-                    message = introduce_error(message)
-                    print(f"Pacote {i + 1} corrompido: {message}")
-
-                packet = f"{sequence_number}|{message}|{checksum}"
+                    message_to_send = introduce_error(message)
+                    print(f"Pacote {i + 1} corrompido: {message_to_send}")
+                else:
+                    message_to_send = message
+            
+                packet = f"{sequence_number}|{message_to_send}|{checksum}"
                 packet_list.append(packet)
                 packets_sent.append(sequence_number)
                 
                 print(f"Enviando pacote {sequence_number}")
                 client_socket.send(packet.encode())
                 time.sleep(interval)
-
+            
             print("\nAguardando confirmações...")
             client_socket.settimeout(10)  # Timeout para receber todas as confirmações
-            
             try:
                 combined_acks = client_socket.recv(1024).decode()
                 elapsed_time = time.time() - start_time
