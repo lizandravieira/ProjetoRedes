@@ -31,7 +31,13 @@
   - Janela de recepção dinâmica, informada ao cliente.
 - Respostas ao cliente:
   - Envio de ACK (confirmação positiva) e NACK (confirmação negativa).
- 
+
+- Detalhes adicionais:
+  - O envio do pacote possui um mecanismo de tratamento para o tamanho da mensagem. Se o pacote exceder o limite de 5 caracteres, os caracteres além desse limite são descartados. Isso significa que apenas os primeiros 5 caracteres da mensagem serão enviados, enquanto o restante será ignorado.
+  - Esse comportamento é implementado para prevenir o estouro do buffer, que pode ocorrer quando uma quantidade de dados maior do que a capacidade esperada é processada. Ao limitar a mensagem a 5 caracteres e descartar o excesso, o sistema garante que o buffer será utilizado de forma segura, evitando problemas como falhas ou corrupção de dados devido a sobrecarga.
+    
+  ![image](https://github.com/user-attachments/assets/546fecb3-65bb-4fcd-b44a-5b97b22453f9)
+
 ---
 
 ## **Protocolo de Comunicação**
